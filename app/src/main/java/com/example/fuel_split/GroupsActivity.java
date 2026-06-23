@@ -76,7 +76,9 @@ public class GroupsActivity extends AppCompatActivity {
                 List<String> addrs = cm.getUserGroups();
                 groupList.clear();
                 for (String addr : addrs) {
-                    groupList.add(new GroupItem("Group", addr, 2));
+                    String       name    = cm.getGroupName(addr);
+                    List<String> members = cm.getGroupMembers(addr);
+                    groupList.add(new GroupItem(name, addr, members.size()));
                 }
                 runOnUiThread(() -> {
                     adapter.notifyDataSetChanged();

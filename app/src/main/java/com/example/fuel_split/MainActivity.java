@@ -126,15 +126,13 @@ public class MainActivity extends AppCompatActivity {
                 boolean already = cm.isRegistered(myAddress);
                 if (already) {
                     android.util.Log.d("FUELSPLIT", "Already registered on-chain");
-                    runOnUiThread(() -> android.widget.Toast.makeText(
-                            this, "Already registered on-chain ✓", android.widget.Toast.LENGTH_LONG).show());
                 } else {
-                    String txHash = cm.register("Daksh", "");
-                    android.util.Log.d("FUELSPLIT", "Register tx: " + txHash);
-                    boolean nowReg = cm.isRegistered(myAddress);
-                    runOnUiThread(() -> android.widget.Toast.makeText(
-                            this, nowReg ? "Registered on-chain ✓" : "Register sent, not confirmed",
-                            android.widget.Toast.LENGTH_LONG).show());
+                    String savedUsername = getSharedPreferences("fuelsplit", MODE_PRIVATE)
+                            .getString("username", "");
+                    if (!savedUsername.isEmpty()) {
+                        String txHash = cm.register(savedUsername, "");
+                        android.util.Log.d("FUELSPLIT", "Register tx: " + txHash);
+                    }
                 }
             } catch (Exception e) {
                 android.util.Log.e("FUELSPLIT", "Error", e);
