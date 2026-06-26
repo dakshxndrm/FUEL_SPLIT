@@ -13,8 +13,7 @@ import java.util.Arrays;
 
 public class BlockchainManager {
 
-    // CHANGE this to YOUR PC's WiFi IPv4 from ipconfig
-    public static final String RPC_URL = "https://rpc-amoy.polygon.technology/";
+    public static final String RPC_URL = Config.RPC_URL;
 
     private final Web3j web3;
 

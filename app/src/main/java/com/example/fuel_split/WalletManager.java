@@ -9,6 +9,7 @@ import androidx.security.crypto.MasterKey;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.ECKeyPair;
 import org.web3j.crypto.Keys;
+import org.web3j.utils.Numeric;
 
 import java.security.Security;
 
@@ -46,7 +47,7 @@ public class WalletManager {
 
     public Credentials createWallet() throws Exception {
         ECKeyPair keyPair = Keys.createEcKeyPair();
-        String privateKey = keyPair.getPrivateKey().toString(16);
+        String privateKey = Numeric.toHexStringNoPrefixZeroPadded(keyPair.getPrivateKey(), 64);
         prefs.edit().putString(KEY_PRIVATE, privateKey).apply();
         return Credentials.create(keyPair);
     }

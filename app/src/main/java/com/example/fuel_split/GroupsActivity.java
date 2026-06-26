@@ -108,33 +108,32 @@ public class GroupsActivity extends AppCompatActivity {
 
         pendingMembers.clear();
 
+        etMemberUsername.setHint("Friend code");
         btnAdd.setOnClickListener(v -> {
-            String uname = etMemberUsername.getText().toString().trim();
-            if (uname.isEmpty()) return;
-            tvStatus.setText("Looking up " + uname + "...");
+            String code = etMemberUsername.getText().toString().trim();
+            if (code.isEmpty()) return;
+            tvStatus.setText("Looking up " + code + "...");
 
             new Thread(() -> {
                 try {
-                    String addr = cm.getUsernameAddress(uname);
+                    String[] result  = ProfileClient.lookupByCode(code);
+                    String addr      = result[0];
+                    String chipLabel = result[1].isEmpty() ? code : result[1];
                     runOnUiThread(() -> {
-                        if (addr == null) {
-                            tvStatus.setText(uname + " not found");
-                        } else {
-                            pendingMembers.put(uname, addr);
-                            Chip chip = new Chip(this);
-                            chip.setText(uname);
-                            chip.setCloseIconVisible(true);
-                            chip.setOnCloseIconClickListener(c -> {
-                                chipGroup.removeView(chip);
-                                pendingMembers.remove(uname);
-                            });
-                            chipGroup.addView(chip);
-                            etMemberUsername.setText("");
-                            tvStatus.setText("");
-                        }
+                        pendingMembers.put(code, addr);
+                        Chip chip = new Chip(this);
+                        chip.setText(chipLabel);
+                        chip.setCloseIconVisible(true);
+                        chip.setOnCloseIconClickListener(c -> {
+                            chipGroup.removeView(chip);
+                            pendingMembers.remove(code);
+                        });
+                        chipGroup.addView(chip);
+                        etMemberUsername.setText("");
+                        tvStatus.setText("");
                     });
                 } catch (Exception e) {
-                    runOnUiThread(() -> tvStatus.setText("Error: " + e.getMessage()));
+                    runOnUiThread(() -> tvStatus.setText(e.getMessage()));
                 }
             }).start();
         });
@@ -156,7 +155,8 @@ public class GroupsActivity extends AppCompatActivity {
             new Thread(() -> {
                 try {
                     List<String> memberAddrs = new ArrayList<>(pendingMembers.values());
-                    cm.createGroup(groupName, memberAddrs);
+                    String hash = cm.createGroup(groupName, memberAddrs);
+                    cm.waitForReceipt(hash);
                     runOnUiThread(() -> {
                         dialog.dismiss();
                         loadGroups();

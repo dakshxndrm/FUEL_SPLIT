@@ -20,6 +20,8 @@ import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
+import org.web3j.protocol.core.methods.response.TransactionReceipt;
+import org.web3j.tx.response.PollingTransactionReceiptProcessor;
 import org.web3j.utils.Numeric;
 
 import java.math.BigInteger;
@@ -30,14 +32,15 @@ import java.util.List;
 
 public class ContractManager {
 
-    public static final String GROUP_FACTORY_ADDRESS  = "0x97CC2151b535fC1E13D51903D3E4c18D93eF825f";
-    public static final String USER_REGISTRY_ADDRESS  = "0xD81528FFA49c8BA0d725B4bFd3F27C3b63f983Ea";
-    private static final long  CHAIN_ID               = 80002;
+    public static final String GROUP_FACTORY_ADDRESS  = Config.GROUP_FACTORY;
+    public static final String USER_REGISTRY_ADDRESS  = Config.USER_REGISTRY;
+    private static final long  CHAIN_ID               = Config.CHAIN_ID;
     private static final long  DEFAULT_GAS_LIMIT      = 3_000_000L;
     private static final long  REGISTER_GAS_LIMIT     = 500_000L;
 
     private final Web3j       web3;
     private final Credentials credentials;
+    private final PollingTransactionReceiptProcessor receiptProcessor;
 
     // ── Struct / record types ─────────────────────────────────────────────────
 
@@ -70,8 +73,29 @@ public class ContractManager {
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public ContractManager(Web3j web3, Credentials credentials) {
-        this.web3        = web3;
-        this.credentials = credentials;
+        this.web3             = web3;
+        this.credentials      = credentials;
+        this.receiptProcessor = new PollingTransactionReceiptProcessor(web3, 5000, 40);
+    }
+
+    public TransactionReceipt waitForReceipt(String txHash) throws Exception {
+        return receiptProcessor.waitForTransactionReceipt(txHash);
+    }
+
+    public boolean hasGas() throws Exception {
+        BigInteger balance = web3.ethGetBalance(
+                credentials.getAddress(), DefaultBlockParameterName.LATEST)
+                .send().getBalance();
+        return balance.compareTo(BigInteger.ZERO) > 0;
+    }
+
+    private void requireGas() throws Exception {
+        if (!hasGas()) {
+            throw new Exception(
+                    "This wallet has no test POL for gas. " +
+                    "Fund it from the Polygon Amoy faucet first. " +
+                    "Address: " + credentials.getAddress());
+        }
     }
 
     // ── UserRegistry reads ────────────────────────────────────────────────────
@@ -150,6 +174,7 @@ public class ContractManager {
     // ── UserRegistry writes ───────────────────────────────────────────────────
 
     public String register(String username, String referralCode) throws Exception {
+        requireGas();
         Function fn = new Function("register",
                 Arrays.asList(new Utf8String(username), new Utf8String(referralCode)),
                 Collections.emptyList());
@@ -159,6 +184,7 @@ public class ContractManager {
     // ── GroupFactory writes ───────────────────────────────────────────────────
 
     public String createGroup(String groupName, List<String> memberAddresses) throws Exception {
+        requireGas();
         Function fn = new Function("createGroup",
                 Arrays.asList(new Utf8String(groupName), toAddressArray(memberAddresses)),
                 Collections.singletonList(new TypeReference<Address>() {}));
@@ -170,6 +196,7 @@ public class ContractManager {
     public String addExpense(String groupAddress, String description,
                              BigInteger amountPaise, List<String> memberAddresses,
                              List<BigInteger> shares) throws Exception {
+        requireGas();
         DynamicArray<Uint256> sharesArr = new DynamicArray<>(Uint256.class,
                 shares.stream().map(Uint256::new)
                         .collect(java.util.stream.Collectors.toList()));
@@ -182,6 +209,7 @@ public class ContractManager {
 
     public String markSettled(String groupAddress, String creditorAddress,
                               BigInteger amountPaise) throws Exception {
+        requireGas();
         Function fn = new Function("markSettled",
                 Arrays.asList(new Address(creditorAddress), new Uint256(amountPaise)),
                 Collections.emptyList());
@@ -189,6 +217,7 @@ public class ContractManager {
     }
 
     public String confirmSettlement(String groupAddress, int settlementId) throws Exception {
+        requireGas();
         Function fn = new Function("confirmSettlement",
                 Collections.singletonList(new Uint256(settlementId)),
                 Collections.emptyList());
@@ -232,8 +261,19 @@ public class ContractManager {
                 credentials.getAddress(), DefaultBlockParameterName.LATEST)
                 .send().getTransactionCount();
         BigInteger gasPrice = web3.ethGasPrice().send().getGasPrice();
+        BigInteger gas      = BigInteger.valueOf(gasLimit);
+        try {
+            Transaction estimateTx = Transaction.createFunctionCallTransaction(
+                    credentials.getAddress(), nonce, gasPrice, null, to, encodedFn);
+            org.web3j.protocol.core.methods.response.EthEstimateGas est =
+                    web3.ethEstimateGas(estimateTx).send();
+            if (!est.hasError()) {
+                // 1.25x buffer: multiply by 5 then divide by 4 (integer arithmetic)
+                gas = est.getAmountUsed().multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(4));
+            }
+        } catch (Exception ignored) {}
         RawTransaction raw  = RawTransaction.createTransaction(
-                nonce, gasPrice, BigInteger.valueOf(gasLimit), to, encodedFn);
+                nonce, gasPrice, gas, to, encodedFn);
         byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, credentials);
         EthSendTransaction tx = web3.ethSendRawTransaction(Numeric.toHexString(signed)).send();
         if (tx.hasError()) throw new Exception(tx.getError().getMessage());

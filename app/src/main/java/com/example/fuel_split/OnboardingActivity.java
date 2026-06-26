@@ -54,16 +54,29 @@ public class OnboardingActivity extends AppCompatActivity {
                 BlockchainManager bm   = new BlockchainManager();
                 ContractManager cm     = new ContractManager(bm.getWeb3(), creds);
 
+                runOnUiThread(() -> setLoading(true, "Funding your wallet..."));
+                FaucetClient.fundWallet(creds.getAddress());
+
+                runOnUiThread(() -> setLoading(true, "Creating your profile..."));
+                String code = ProfileClient.createProfile(creds.getAddress(), username);
+
                 runOnUiThread(() -> setLoading(true, "Registering on blockchain..."));
 
                 boolean already = cm.isRegistered(creds.getAddress());
                 if (!already) {
-                    cm.register(username, referral);
+                    String hash = cm.register(code, "");
+                    cm.waitForReceipt(hash);
                 }
 
-                // Save username locally for display
+                // Keep gate key so MainActivity doesn't redirect to onboarding
                 getSharedPreferences("fuelsplit", MODE_PRIVATE)
                         .edit().putString("username", username).apply();
+                // Save friend-code identity
+                getSharedPreferences("FuelSplitProfile", MODE_PRIVATE)
+                        .edit()
+                        .putString("displayName", username)
+                        .putString("code", code)
+                        .apply();
 
                 runOnUiThread(() -> {
                     setLoading(false, "");
