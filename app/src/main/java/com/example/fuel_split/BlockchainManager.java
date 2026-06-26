@@ -30,8 +30,9 @@ public class BlockchainManager {
         return web3;
     }
 
-    public String testConnection() throws Exception {
-        Web3ClientVersion version = web3.web3ClientVersion().send();
-        return version.getWeb3ClientVersion();
-    }
+    // ARCHIVED: testConnection() — dev-only RPC ping, never called in production code
+    // public String testConnection() throws Exception {
+    //     Web3ClientVersion version = web3.web3ClientVersion().send();
+    //     return version.getWeb3ClientVersion();
+    // }
 }

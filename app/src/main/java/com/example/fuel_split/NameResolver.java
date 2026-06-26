@@ -20,34 +20,23 @@ public final class NameResolver {
         return cached != null ? cached : shortAddr(address);
     }
 
-    /**
-     * Immediately sets tv to the cached name (or short address), then kicks off a
-     * background lookup; updates tv once the real name arrives.
-     */
-    public static void resolveAsync(String address, TextView tv) {
-        if (address == null || address.isEmpty()) {
-            tv.setText("Unknown");
-            return;
-        }
-        String key    = address.toLowerCase();
-        String cached = cache.get(key);
-        if (cached != null) {
-            tv.setText(cached);
-            return;
-        }
-        // Optimistic placeholder while network resolves
-        tv.setText(shortAddr(address));
-
-        new Thread(() -> {
-            try {
-                String[] result = ProfileClient.lookupByAddress(address);
-                if (result != null && result.length > 1 && !result[1].isEmpty()) {
-                    cache.put(key, result[1]);
-                    tv.post(() -> tv.setText(result[1]));
-                }
-            } catch (Exception ignored) {}
-        }).start();
-    }
+    // ARCHIVED: resolveAsync() — all call sites do inline background lookups instead, never called
+    // public static void resolveAsync(String address, TextView tv) {
+    //     if (address == null || address.isEmpty()) { tv.setText("Unknown"); return; }
+    //     String key    = address.toLowerCase();
+    //     String cached = cache.get(key);
+    //     if (cached != null) { tv.setText(cached); return; }
+    //     tv.setText(shortAddr(address));
+    //     new Thread(() -> {
+    //         try {
+    //             String[] result = ProfileClient.lookupByAddress(address);
+    //             if (result != null && result.length > 1 && !result[1].isEmpty()) {
+    //                 cache.put(key, result[1]);
+    //                 tv.post(() -> tv.setText(result[1]));
+    //             }
+    //         } catch (Exception ignored) {}
+    //     }).start();
+    // }
 
     /**
      * Seed the cache with a name already known (e.g. from lookupByCode results).
