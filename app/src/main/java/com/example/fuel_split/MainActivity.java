@@ -242,9 +242,12 @@ public class MainActivity extends AppCompatActivity {
                 List<String> addrs = cm.getUserGroups();
                 groupList.clear();
                 for (String addr : addrs) {
-                    String       name    = cm.getGroupName(addr);
-                    List<String> members = cm.getGroupMembers(addr);
-                    groupList.add(new GroupItem(name, addr, members.size()));
+                    try {
+                        if (cm.isGroupDeleted(addr)) continue;
+                        String       name    = cm.getGroupName(addr);
+                        List<String> members = cm.getGroupMembers(addr);
+                        groupList.add(new GroupItem(name, addr, members.size()));
+                    } catch (Exception ignored) {}
                 }
                 runOnUiThread(() -> {
                     groupAdapter.notifyDataSetChanged();
@@ -350,12 +353,71 @@ public class MainActivity extends AppCompatActivity {
         else tvSubtitle.setText(count + (count == 1 ? " trip" : " trips") + " logged");
     }
 
-    // ── Balances tab (only unsettled trips) ───────────────────────────────
+    // ── Balances tab: on-chain debts ──────────────────────────────────────
     private void showSettlements() {
         balancesContainer.removeAllViews();
-        List<String> settlements = calculateSettlements();
 
-        if (settlements.isEmpty()) {
+        if (cm == null || creds == null) {
+            TextView tv = new TextView(this);
+            tv.setText("Connecting to blockchain…");
+            tv.setTextColor(0xFF7B8AA0);
+            tv.setTextSize(15);
+            tv.setPadding(dp(16), dp(24), dp(16), dp(24));
+            balancesContainer.addView(tv);
+            return;
+        }
+
+        TextView tvLoading = new TextView(this);
+        tvLoading.setText("Loading debts…");
+        tvLoading.setTextColor(0xFF7B8AA0);
+        tvLoading.setTextSize(15);
+        tvLoading.setPadding(dp(16), dp(24), dp(16), dp(24));
+        balancesContainer.addView(tvLoading);
+
+        final String myAddr = creds.getAddress().toLowerCase();
+
+        new Thread(() -> {
+            try {
+                List<String> groups = cm.getUserGroups();
+                List<ContractManager.DebtRecord> unsettled = new ArrayList<>();
+                List<ContractManager.DebtRecord> settled   = new ArrayList<>();
+
+                for (String gAddr : groups) {
+                    try {
+                        if (cm.isGroupDeleted(gAddr)) continue;
+                        List<ContractManager.DebtRecord> debts = cm.getDebts(gAddr);
+                        for (ContractManager.DebtRecord d : debts) {
+                            boolean mine = d.debtor.equalsIgnoreCase(myAddr)
+                                    || d.creditor.equalsIgnoreCase(myAddr);
+                            if (!mine) continue;
+                            if (d.settled) settled.add(d);
+                            else unsettled.add(d);
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                final List<ContractManager.DebtRecord> finalSettled = settled;
+                runOnUiThread(() -> renderDebtList(unsettled, finalSettled, myAddr));
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    balancesContainer.removeAllViews();
+                    TextView tvErr = new TextView(this);
+                    tvErr.setText("Error: " + e.getMessage());
+                    tvErr.setTextColor(0xFFFF6B6B);
+                    tvErr.setTextSize(13);
+                    tvErr.setPadding(dp(16), dp(16), dp(16), dp(16));
+                    balancesContainer.addView(tvErr);
+                });
+            }
+        }).start();
+    }
+
+    private void renderDebtList(List<ContractManager.DebtRecord> unsettled,
+                                List<ContractManager.DebtRecord> settled,
+                                String myAddr) {
+        balancesContainer.removeAllViews();
+
+        if (unsettled.isEmpty() && settled.isEmpty()) {
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setGravity(android.view.Gravity.CENTER);
@@ -379,7 +441,7 @@ public class MainActivity extends AppCompatActivity {
             card.addView(msg);
 
             TextView sub = new TextView(this);
-            sub.setText("No pending payments between anyone");
+            sub.setText("No pending payments");
             sub.setTextColor(0xFF7B8AA0);
             sub.setTextSize(14);
             sub.setGravity(android.view.Gravity.CENTER);
@@ -390,69 +452,168 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        for (String s : settlements) {
-            View item = getLayoutInflater()
-                    .inflate(R.layout.item_settlement, balancesContainer, false);
+        if (!unsettled.isEmpty()) {
+            TextView tvHeader = new TextView(this);
+            tvHeader.setText("PENDING");
+            tvHeader.setTextColor(0xFF7B8AA0);
+            tvHeader.setTextSize(11);
+            tvHeader.setLetterSpacing(0.08f);
+            tvHeader.setPadding(0, dp(4), 0, dp(12));
+            balancesContainer.addView(tvHeader);
 
-            String[] byPays   = s.split(" pays ");
-            String debtorName = byPays[0].trim();
-            String[] byTo     = byPays[1].split(" to ");
-            String amount     = byTo[0].trim();
-            String creditor   = byTo[1].trim();
-
-            ((TextView) item.findViewById(R.id.tvDebtor)).setText(debtorName);
-            ((TextView) item.findViewById(R.id.tvAmount)).setText(amount);
-            ((TextView) item.findViewById(R.id.tvCreditor)).setText(creditor);
-
-            balancesContainer.addView(item);
+            for (ContractManager.DebtRecord d : unsettled) {
+                addDebtRow(d, myAddr, false);
+            }
+        } else {
+            // All pending debts settled — show celebration header
+            TextView tvDone = new TextView(this);
+            tvDone.setText("✓  All caught up — no pending debts");
+            tvDone.setTextColor(0xFF00C9A7);
+            tvDone.setTextSize(14);
+            tvDone.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvDone.setPadding(0, dp(4), 0, dp(16));
+            balancesContainer.addView(tvDone);
         }
-    }
 
-    private List<String> calculateSettlements() {
-        HashMap<String, Double> netBalance = new HashMap<>();
+        if (!settled.isEmpty()) {
+            TextView tvHistHeader = new TextView(this);
+            tvHistHeader.setText("HISTORY");
+            tvHistHeader.setTextColor(0xFF7B8AA0);
+            tvHistHeader.setTextSize(11);
+            tvHistHeader.setLetterSpacing(0.08f);
+            tvHistHeader.setPadding(0, dp(16), 0, dp(12));
+            balancesContainer.addView(tvHistHeader);
 
-        for (Trip trip : tripList) {
-            if (trip.isSettled()) continue;
-
-            double total  = Double.parseDouble(trip.getTotal());
-            String paidBy = trip.getPaidBy();
-            Map<String, Double> shares = trip.getAllShares();
-
-            netBalance.put(paidBy, netBalance.getOrDefault(paidBy, 0.0) + total);
-            for (Map.Entry<String, Double> entry : shares.entrySet()) {
-                String person = entry.getKey();
-                double amount = entry.getValue();
-                netBalance.put(person, netBalance.getOrDefault(person, 0.0) - amount);
+            for (ContractManager.DebtRecord d : settled) {
+                addDebtRow(d, myAddr, true);
             }
         }
-
-        return simplifyDebts(netBalance);
     }
 
-    private List<String> simplifyDebts(HashMap<String, Double> netBalance) {
-        List<String> result = new ArrayList<>();
-        List<Map.Entry<String, Double>> creditors = new ArrayList<>();
-        List<Map.Entry<String, Double>> debtors   = new ArrayList<>();
+    private void addDebtRow(ContractManager.DebtRecord d, String myAddr, boolean alreadySettled) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setBackgroundResource(R.drawable.bg_input);
+        row.setPadding(dp(16), dp(14), dp(16), dp(14));
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.setMargins(0, 0, 0, dp(10));
+        row.setLayoutParams(rowParams);
+        if (alreadySettled) row.setAlpha(0.45f);
 
-        for (Map.Entry<String, Double> entry : netBalance.entrySet()) {
-            if (entry.getValue() >  0.5) creditors.add(entry);
-            if (entry.getValue() < -0.5) debtors.add(entry);
+        LinearLayout topLine = new LinearLayout(this);
+        topLine.setOrientation(LinearLayout.HORIZONTAL);
+        topLine.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        TextView tvDebtor = new TextView(this);
+        tvDebtor.setText(NameResolver.nameFor(d.debtor));
+        tvDebtor.setTextColor(d.debtor.equalsIgnoreCase(myAddr) ? 0xFFFF6B6B : 0xFFF0F0FF);
+        tvDebtor.setTextSize(14);
+        topLine.addView(tvDebtor);
+
+        TextView tvArrow = new TextView(this);
+        tvArrow.setText("  →  ");
+        tvArrow.setTextColor(0xFF7B8AA0);
+        tvArrow.setTextSize(14);
+        topLine.addView(tvArrow);
+
+        TextView tvCreditor = new TextView(this);
+        tvCreditor.setText(NameResolver.nameFor(d.creditor));
+        tvCreditor.setTextColor(d.creditor.equalsIgnoreCase(myAddr) ? 0xFF00C9A7 : 0xFFF0F0FF);
+        tvCreditor.setTextSize(14);
+        tvCreditor.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        topLine.addView(tvCreditor);
+
+        TextView tvAmount = new TextView(this);
+        long rupees   = d.amountPaise / 100;
+        long paiseRem = d.amountPaise % 100;
+        tvAmount.setText("₹" + rupees + (paiseRem > 0 ? "." + String.format("%02d", paiseRem) : ""));
+        tvAmount.setTextColor(alreadySettled ? 0xFF7B8AA0 : 0xFFFF6B6B);
+        tvAmount.setTextSize(16);
+        tvAmount.setTypeface(null, android.graphics.Typeface.BOLD);
+        topLine.addView(tvAmount);
+
+        row.addView(topLine);
+
+        String tripName = parseTripName(d.description);
+        if (!tripName.isEmpty()) {
+            TextView tvTrip = new TextView(this);
+            tvTrip.setText(tripName);
+            tvTrip.setTextColor(0xFF7B8AA0);
+            tvTrip.setTextSize(12);
+            tvTrip.setPadding(0, dp(4), 0, 0);
+            row.addView(tvTrip);
         }
 
-        int i = 0, j = 0;
-        while (i < debtors.size() && j < creditors.size()) {
-            Map.Entry<String, Double> debtor   = debtors.get(i);
-            Map.Entry<String, Double> creditor = creditors.get(j);
-            double amount = Math.min(-debtor.getValue(), creditor.getValue());
-            result.add(debtor.getKey() + " pays ₹"
-                    + String.format("%.2f", amount) + " to " + creditor.getKey());
-            debtor.setValue(debtor.getValue() + amount);
-            creditor.setValue(creditor.getValue() - amount);
-            if (Math.abs(debtor.getValue())   < 0.5) i++;
-            if (Math.abs(creditor.getValue()) < 0.5) j++;
+        if (alreadySettled) {
+            TextView tvBadge = new TextView(this);
+            tvBadge.setText("Settled");
+            tvBadge.setTextColor(0xFF7B8AA0);
+            tvBadge.setTextSize(11);
+            tvBadge.setPadding(0, dp(4), 0, 0);
+            row.addView(tvBadge);
+        } else if (d.debtor.equalsIgnoreCase(myAddr)) {
+            MaterialButton btnSettle = new MaterialButton(this,
+                    null, com.google.android.material.R.attr.materialButtonOutlinedStyle);
+            btnSettle.setText("Settle");
+            btnSettle.setAllCaps(false);
+            btnSettle.setTextColor(0xFF00C9A7);
+            btnSettle.setTextSize(13f);
+            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(36));
+            btnParams.setMargins(0, dp(8), 0, 0);
+            btnSettle.setLayoutParams(btnParams);
+            btnSettle.setOnClickListener(v -> doSettle(d, row, btnSettle));
+            row.addView(btnSettle);
         }
 
-        return result;
+        resolveNameAsync(d.debtor, tvDebtor);
+        resolveNameAsync(d.creditor, tvCreditor);
+
+        balancesContainer.addView(row);
+    }
+
+    private void doSettle(ContractManager.DebtRecord d, LinearLayout row, MaterialButton btn) {
+        btn.setEnabled(false);
+        btn.setText("Settling…");
+        new Thread(() -> {
+            try {
+                cm.waitForReceipt(cm.settleDebt(d.groupAddress, d.id));
+                runOnUiThread(() -> {
+                    row.setAlpha(0.45f);
+                    btn.setText("Settled ✓");
+                    btn.setTextColor(0xFF7B8AA0);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    btn.setEnabled(true);
+                    btn.setText("Settle");
+                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private void resolveNameAsync(String addr, TextView tv) {
+        new Thread(() -> {
+            try {
+                String[] info = ProfileClient.lookupByAddress(addr);
+                if (info != null && info.length > 1 && !info[1].isEmpty()) {
+                    NameResolver.seed(addr, info[1]);
+                    runOnUiThread(() -> tv.setText(info[1]));
+                }
+            } catch (Exception ignored) {}
+        }).start();
+    }
+
+    private String parseTripName(String desc) {
+        if (desc == null || desc.isEmpty()) return "";
+        if (desc.startsWith("name=")) {
+            int semi = desc.indexOf(';');
+            return semi > 5 ? desc.substring(5, semi) : desc.substring(5);
+        }
+        return desc;
     }
 
     private int dp(int v) {

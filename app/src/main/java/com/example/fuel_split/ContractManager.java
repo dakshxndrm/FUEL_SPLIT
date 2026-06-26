@@ -6,11 +6,10 @@ import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
 import org.web3j.abi.datatypes.Bool;
 import org.web3j.abi.datatypes.DynamicArray;
+import org.web3j.abi.datatypes.DynamicStruct;
 import org.web3j.abi.datatypes.Function;
-import org.web3j.abi.datatypes.StaticStruct;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.Utf8String;
-import org.web3j.abi.datatypes.generated.Int256;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.RawTransaction;
@@ -32,42 +31,53 @@ import java.util.List;
 
 public class ContractManager {
 
-    public static final String GROUP_FACTORY_ADDRESS  = Config.GROUP_FACTORY;
-    public static final String USER_REGISTRY_ADDRESS  = Config.USER_REGISTRY;
-    private static final long  CHAIN_ID               = Config.CHAIN_ID;
-    private static final long  DEFAULT_GAS_LIMIT      = 3_000_000L;
-    private static final long  REGISTER_GAS_LIMIT     = 500_000L;
+    public static final String GROUP_FACTORY_ADDRESS = Config.GROUP_FACTORY;
+    public static final String USER_REGISTRY_ADDRESS = Config.USER_REGISTRY;
+    private static final long  CHAIN_ID              = Config.CHAIN_ID;
+    private static final long  DEFAULT_GAS_LIMIT     = 3_000_000L;
+    private static final long  REGISTER_GAS_LIMIT    = 500_000L;
 
     private final Web3j       web3;
     private final Credentials credentials;
     private final PollingTransactionReceiptProcessor receiptProcessor;
 
-    // ── Struct / record types ─────────────────────────────────────────────────
+    // ── Debt struct mirrors ExpenseLedger.Debt ────────────────────────────────
 
-    public static class SettlementStruct extends StaticStruct {
-        public final Address debtor;
-        public final Address creditor;
-        public final Uint256 amountPaise;
-        public final Bool    confirmed;
-        public final Uint256 timestamp;
+    public static class DebtStruct extends DynamicStruct {
+        public final Uint256    id;
+        public final Address    debtor;
+        public final Address    creditor;
+        public final Uint256    amountPaise;
+        public final Utf8String description;
+        public final Bool       settled;
+        public final Uint256    createdAt;
+        public final Uint256    settledAt;
 
-        public SettlementStruct(Address debtor, Address creditor,
-                                Uint256 amountPaise, Bool confirmed, Uint256 timestamp) {
-            super(debtor, creditor, amountPaise, confirmed, timestamp);
+        public DebtStruct(Uint256 id, Address debtor, Address creditor,
+                          Uint256 amountPaise, Utf8String description,
+                          Bool settled, Uint256 createdAt, Uint256 settledAt) {
+            super(id, debtor, creditor, amountPaise, description, settled, createdAt, settledAt);
+            this.id          = id;
             this.debtor      = debtor;
             this.creditor    = creditor;
             this.amountPaise = amountPaise;
-            this.confirmed   = confirmed;
-            this.timestamp   = timestamp;
+            this.description = description;
+            this.settled     = settled;
+            this.createdAt   = createdAt;
+            this.settledAt   = settledAt;
         }
     }
 
-    public static class SettlementRecord {
-        public int     index;
+    public static class DebtRecord {
+        public int     id;
         public String  debtor;
         public String  creditor;
         public long    amountPaise;
-        public boolean confirmed;
+        public String  description;
+        public boolean settled;
+        public long    createdAt;
+        public long    settledAt;
+        public String  groupAddress; // set by getDebts() for cross-group lookups
     }
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -136,36 +146,53 @@ public class ContractManager {
         return result.isEmpty() ? "Group" : result.get(0).getValue().toString();
     }
 
+    public boolean isGroupDeleted(String groupAddress) throws Exception {
+        Function fn = new Function("deleted", Collections.emptyList(),
+                Collections.singletonList(new TypeReference<Bool>() {}));
+        List<Type> result = ethCall(groupAddress, fn);
+        return !result.isEmpty() && (Boolean) result.get(0).getValue();
+    }
+
+    public String getGroupCreator(String groupAddress) throws Exception {
+        Function fn = new Function("creator", Collections.emptyList(),
+                Collections.singletonList(new TypeReference<Address>() {}));
+        List<Type> result = ethCall(groupAddress, fn);
+        return result.isEmpty() ? "" : result.get(0).getValue().toString();
+    }
+
     public List<String> getGroupMembers(String groupAddress) throws Exception {
         Function fn = new Function("getMembers", Collections.emptyList(),
                 Collections.singletonList(new TypeReference<DynamicArray<Address>>() {}));
         return decodeAddressList(ethCall(groupAddress, fn));
     }
 
-    public long getBalance(String groupAddress, String debtor, String creditor) throws Exception {
-        Function fn = new Function("getBalance",
+    public long getOwed(String groupAddress, String debtor, String creditor) throws Exception {
+        Function fn = new Function("getOwed",
                 Arrays.asList(new Address(debtor), new Address(creditor)),
-                Collections.singletonList(new TypeReference<Int256>() {}));
+                Collections.singletonList(new TypeReference<Uint256>() {}));
         List<Type> result = ethCall(groupAddress, fn);
         return result.isEmpty() ? 0L : ((BigInteger) result.get(0).getValue()).longValue();
     }
 
-    public List<SettlementRecord> getSettlements(String groupAddress) throws Exception {
-        Function fn = new Function("getSettlements", Collections.emptyList(),
-                Collections.singletonList(new TypeReference<DynamicArray<SettlementStruct>>() {}));
+    public List<DebtRecord> getDebts(String groupAddress) throws Exception {
+        Function fn = new Function("getDebts", Collections.emptyList(),
+                Collections.singletonList(new TypeReference<DynamicArray<DebtStruct>>() {}));
         List<Type> result = ethCall(groupAddress, fn);
-        List<SettlementRecord> records = new ArrayList<>();
+        List<DebtRecord> records = new ArrayList<>();
         if (result.isEmpty()) return records;
         @SuppressWarnings("unchecked")
-        List<SettlementStruct> structs = (List<SettlementStruct>) result.get(0).getValue();
-        for (int i = 0; i < structs.size(); i++) {
-            SettlementStruct s = structs.get(i);
-            SettlementRecord r = new SettlementRecord();
-            r.index       = i;
-            r.debtor      = s.debtor.getValue();
-            r.creditor    = s.creditor.getValue();
-            r.amountPaise = s.amountPaise.getValue().longValue();
-            r.confirmed   = s.confirmed.getValue();
+        List<DebtStruct> structs = (List<DebtStruct>) result.get(0).getValue();
+        for (DebtStruct d : structs) {
+            DebtRecord r = new DebtRecord();
+            r.id           = (int) d.id.getValue().longValue();
+            r.debtor       = d.debtor.getValue();
+            r.creditor     = d.creditor.getValue();
+            r.amountPaise  = d.amountPaise.getValue().longValue();
+            r.description  = d.description.getValue();
+            r.settled      = d.settled.getValue();
+            r.createdAt    = d.createdAt.getValue().longValue();
+            r.settledAt    = d.settledAt.getValue().longValue();
+            r.groupAddress = groupAddress;
             records.add(r);
         }
         return records;
@@ -207,19 +234,18 @@ public class ContractManager {
         return sendTx(groupAddress, FunctionEncoder.encode(fn), DEFAULT_GAS_LIMIT);
     }
 
-    public String markSettled(String groupAddress, String creditorAddress,
-                              BigInteger amountPaise) throws Exception {
+    public String settleDebt(String groupAddress, long debtId) throws Exception {
         requireGas();
-        Function fn = new Function("markSettled",
-                Arrays.asList(new Address(creditorAddress), new Uint256(amountPaise)),
+        Function fn = new Function("settleDebt",
+                Collections.singletonList(new Uint256(debtId)),
                 Collections.emptyList());
         return sendTx(groupAddress, FunctionEncoder.encode(fn), DEFAULT_GAS_LIMIT);
     }
 
-    public String confirmSettlement(String groupAddress, int settlementId) throws Exception {
+    public String deleteGroup(String groupAddress) throws Exception {
         requireGas();
-        Function fn = new Function("confirmSettlement",
-                Collections.singletonList(new Uint256(settlementId)),
+        Function fn = new Function("deleteGroup",
+                Collections.emptyList(),
                 Collections.emptyList());
         return sendTx(groupAddress, FunctionEncoder.encode(fn), DEFAULT_GAS_LIMIT);
     }
@@ -268,12 +294,10 @@ public class ContractManager {
             org.web3j.protocol.core.methods.response.EthEstimateGas est =
                     web3.ethEstimateGas(estimateTx).send();
             if (!est.hasError()) {
-                // 1.25x buffer: multiply by 5 then divide by 4 (integer arithmetic)
                 gas = est.getAmountUsed().multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(4));
             }
         } catch (Exception ignored) {}
-        RawTransaction raw  = RawTransaction.createTransaction(
-                nonce, gasPrice, gas, to, encodedFn);
+        RawTransaction raw  = RawTransaction.createTransaction(nonce, gasPrice, gas, to, encodedFn);
         byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, credentials);
         EthSendTransaction tx = web3.ethSendRawTransaction(Numeric.toHexString(signed)).send();
         if (tx.hasError()) throw new Exception(tx.getError().getMessage());

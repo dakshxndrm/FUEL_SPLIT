@@ -18,7 +18,6 @@ import com.google.android.material.button.MaterialButton;
 
 import org.web3j.crypto.Credentials;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,6 +36,7 @@ public class GroupDetailActivity extends AppCompatActivity {
 
     private List<String> currentMembers   = new ArrayList<>();
     private String       currentGroupName = "";
+    private String       creatorAddress   = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,15 +62,26 @@ public class GroupDetailActivity extends AppCompatActivity {
             showAddMemberDialog();
         });
 
-        // Leave / delete group (removes self from the group on-chain)
+        // Delete (creator) or Leave (everyone else) — wired after loadGroupData resolves creator
         findViewById(R.id.btnDeleteGroup).setOnClickListener(v -> {
             if (cm == null) { toast("Connecting, please wait…"); return; }
-            new AlertDialog.Builder(this)
-                    .setTitle("Leave Group")
-                    .setMessage("Remove yourself from \"" + currentGroupName + "\"?")
-                    .setPositiveButton("Leave", (d, w) -> leaveGroup())
-                    .setNegativeButton("Cancel", null)
-                    .show();
+            boolean isCreator = creds != null
+                    && creds.getAddress().equalsIgnoreCase(creatorAddress);
+            if (isCreator) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Delete Group")
+                        .setMessage("Permanently delete \"" + currentGroupName + "\"? This cannot be undone.")
+                        .setPositiveButton("Delete", (d, w) -> deleteGroup())
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            } else {
+                new AlertDialog.Builder(this)
+                        .setTitle("Leave Group")
+                        .setMessage("Remove yourself from \"" + currentGroupName + "\"?")
+                        .setPositiveButton("Leave", (d, w) -> leaveGroup())
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            }
         });
 
         ContactStore.seedNameResolver(this);
@@ -104,11 +115,22 @@ public class GroupDetailActivity extends AppCompatActivity {
             try {
                 String       name    = cm.getGroupName(groupAddress);
                 List<String> members = cm.getGroupMembers(groupAddress);
+                String       creator = cm.getGroupCreator(groupAddress);
                 currentGroupName = name;
                 currentMembers   = members;
+                creatorAddress   = creator;
+                boolean iAmCreator = creds != null
+                        && creds.getAddress().equalsIgnoreCase(creator);
                 runOnUiThread(() -> {
                     tvGroupName.setText(name);
                     tvMemberCount.setText(members.size() + " member" + (members.size() == 1 ? "" : "s"));
+                    com.google.android.material.button.MaterialButton btnDel =
+                            findViewById(R.id.btnDeleteGroup);
+                    if (iAmCreator) {
+                        btnDel.setText("Delete");
+                    } else {
+                        btnDel.setText("Leave");
+                    }
                     renderMembers(members);
                 });
             } catch (Exception e) {
@@ -211,9 +233,16 @@ public class GroupDetailActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 String myAddr = creds.getAddress().toLowerCase();
-                // Get balance: positive means I owe this member
-                long bal = cm.getBalance(groupAddress, myAddr, memberAddr);
-                if (bal <= 0) {
+                List<ContractManager.DebtRecord> debts = cm.getDebts(groupAddress);
+                List<ContractManager.DebtRecord> mine  = new ArrayList<>();
+                for (ContractManager.DebtRecord d : debts) {
+                    if (d.debtor.equalsIgnoreCase(myAddr)
+                            && d.creditor.equalsIgnoreCase(memberAddr)
+                            && !d.settled) {
+                        mine.add(d);
+                    }
+                }
+                if (mine.isEmpty()) {
                     runOnUiThread(() -> {
                         btn.setEnabled(true);
                         btn.setText("Settle");
@@ -221,11 +250,12 @@ public class GroupDetailActivity extends AppCompatActivity {
                     });
                     return;
                 }
-                String hash = cm.markSettled(groupAddress, memberAddr, BigInteger.valueOf(bal));
-                cm.waitForReceipt(hash);
+                for (ContractManager.DebtRecord d : mine) {
+                    cm.waitForReceipt(cm.settleDebt(groupAddress, d.id));
+                }
                 runOnUiThread(() -> {
                     btn.setText("Done");
-                    toast("Settlement proposed — other party needs to confirm");
+                    toast("Settled!");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -243,7 +273,7 @@ public class GroupDetailActivity extends AppCompatActivity {
         btn.setEnabled(false);
         new Thread(() -> {
             try {
-                cm.removeMemberFromGroup(groupAddress, addr);
+                cm.waitForReceipt(cm.removeMemberFromGroup(groupAddress, addr));
                 currentMembers.remove(addr);
                 runOnUiThread(() -> {
                     toast("Member removed");
@@ -252,10 +282,21 @@ public class GroupDetailActivity extends AppCompatActivity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     btn.setEnabled(true);
-                    toast("Error: " + e.getMessage());
+                    toast(friendlyGroupError(e.getMessage()));
                 });
             }
         }).start();
+    }
+
+    private String friendlyGroupError(String raw) {
+        if (raw == null) return "Something went wrong";
+        if (raw.contains("Member still owes money"))
+            return "Can't remove — this member still owes money in the group";
+        if (raw.contains("Member is still owed money"))
+            return "Can't remove — this member is still owed money by others";
+        if (raw.contains("Cannot remove creator"))
+            return "The group creator cannot be removed";
+        return raw;
     }
 
     // ── Leave group (remove self) ─────────────────────────────────────────────
@@ -267,6 +308,22 @@ public class GroupDetailActivity extends AppCompatActivity {
                 cm.removeMemberFromGroup(groupAddress, creds.getAddress());
                 runOnUiThread(() -> {
                     toast("You left the group");
+                    finish();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> toast(friendlyGroupError(e.getMessage())));
+            }
+        }).start();
+    }
+
+    // ── Delete group (creator only) ───────────────────────────────────────────
+
+    private void deleteGroup() {
+        new Thread(() -> {
+            try {
+                cm.waitForReceipt(cm.deleteGroup(groupAddress));
+                runOnUiThread(() -> {
+                    toast("Group deleted");
                     finish();
                 });
             } catch (Exception e) {

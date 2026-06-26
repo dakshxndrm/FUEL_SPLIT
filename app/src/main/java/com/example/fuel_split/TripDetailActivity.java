@@ -7,7 +7,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -112,11 +111,9 @@ public class TripDetailActivity extends AppCompatActivity {
         }
     }
 
-    // ── Stage 4: on-chain settlement ───────────────────────────────────────
     private void settleTrip() {
         String groupAddr = trip.getGroupAddress();
         if (groupAddr == null || groupAddr.isEmpty()) {
-            // No on-chain group — just mark settled locally
             markSettledLocally();
             return;
         }
@@ -132,25 +129,16 @@ public class TripDetailActivity extends AppCompatActivity {
                 BlockchainManager bm = new BlockchainManager();
                 ContractManager   cm = new ContractManager(bm.getWeb3(), creds);
 
-                // Find creditors for this group (same pattern as GroupDetailActivity)
-                String myAddr   = creds.getAddress().toLowerCase();
-                List<String> members = cm.getGroupMembers(groupAddr);
+                String myAddr = creds.getAddress().toLowerCase();
+                runOnUiThread(() -> tvSettleStatus.setText("Fetching debts…"));
 
-                List<String> debtorAddrs  = new ArrayList<>();
-                List<Long>   debtAmounts  = new ArrayList<>();
-
-                runOnUiThread(() -> tvSettleStatus.setText("Checking on-chain balances…"));
-
-                for (String other : members) {
-                    if (other.equalsIgnoreCase(myAddr)) continue;
-                    long bal = cm.getBalance(groupAddr, myAddr, other);
-                    if (bal > 0) {
-                        debtorAddrs.add(other);
-                        debtAmounts.add(bal);
-                    }
+                List<ContractManager.DebtRecord> debts = cm.getDebts(groupAddr);
+                List<ContractManager.DebtRecord> mine = new ArrayList<>();
+                for (ContractManager.DebtRecord d : debts) {
+                    if (d.debtor.equalsIgnoreCase(myAddr) && !d.settled) mine.add(d);
                 }
 
-                if (debtorAddrs.isEmpty()) {
+                if (mine.isEmpty()) {
                     runOnUiThread(() -> {
                         tvSettleStatus.setText("You have no outstanding debt in this group.");
                         btnSettle.setEnabled(true);
@@ -159,18 +147,13 @@ public class TripDetailActivity extends AppCompatActivity {
                     return;
                 }
 
-                runOnUiThread(() -> tvSettleStatus.setText("Submitting settlement…"));
-
-                // Settle with each creditor
-                for (int i = 0; i < debtorAddrs.size(); i++) {
-                    String settleHash = cm.markSettled(
-                            groupAddr, debtorAddrs.get(i),
-                            BigInteger.valueOf(debtAmounts.get(i)));
-                    cm.waitForReceipt(settleHash);
+                runOnUiThread(() -> tvSettleStatus.setText("Settling " + mine.size() + " debt(s)…"));
+                for (ContractManager.DebtRecord d : mine) {
+                    cm.waitForReceipt(cm.settleDebt(groupAddr, d.id));
                 }
 
                 runOnUiThread(() -> {
-                    tvSettleStatus.setText("Settlement proposed — the other party needs to confirm.");
+                    tvSettleStatus.setText("Settled!");
                     markSettledLocally();
                 });
 
