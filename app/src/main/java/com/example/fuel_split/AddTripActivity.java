@@ -7,6 +7,10 @@ import android.view.View;
 import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -53,6 +57,7 @@ public class AddTripActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_trip);
+        applyEdgeToEdgeInsets();
 
         viewFlipper         = findViewById(R.id.viewFlipper);
         etTripName          = findViewById(R.id.etTripName);
@@ -269,6 +274,23 @@ public class AddTripActivity extends AppCompatActivity {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
+    /** Pad the header below the status bar and the Next/Submit bar above the nav bar. */
+    private void applyEdgeToEdgeInsets() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        View header    = findViewById(R.id.addTripHeader);
+        View bottomBar = findViewById(R.id.addTripBottomBar);
+        final int headerTop    = header.getPaddingTop();
+        final int bottomBottom = bottomBar.getPaddingBottom();
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootAddTrip), (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            header.setPadding(header.getPaddingLeft(), headerTop + bars.top,
+                              header.getPaddingRight(), header.getPaddingBottom());
+            bottomBar.setPadding(bottomBar.getPaddingLeft(), bottomBar.getPaddingTop(),
+                                 bottomBar.getPaddingRight(), bottomBottom + bars.bottom);
+            return insets;
+        });
+    }
+
     // ── Update header ──────────────────────────────────────────────────────
     private void updateHeader() {
         if (preloadGroupAddress != null) {
@@ -402,21 +424,21 @@ public class AddTripActivity extends AppCompatActivity {
         tvTotal.setText("Total fuel cost:  ₹" + String.format("%.2f", totalCost));
         tvTotal.setTextColor(0xFF00C9A7);
         tvTotal.setTextSize(17);
-        tvTotal.setPadding(0, 0, 0, 8);
+        tvTotal.setPadding(0, 0, 0, dp(8));
         percentageContainer.addView(tvTotal);
 
         TextView tvSplitLabel = new TextView(this);
         tvSplitLabel.setText("How do you want to split?");
         tvSplitLabel.setTextColor(0xFF7B8AA0);
         tvSplitLabel.setTextSize(13);
-        tvSplitLabel.setPadding(0, 20, 0, 10);
+        tvSplitLabel.setPadding(0, dp(20), 0, dp(10));
         percentageContainer.addView(tvSplitLabel);
 
         splitModeContainer = new LinearLayout(this);
         splitModeContainer.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams modeParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        modeParams.setMargins(0, 0, 0, 20);
+        modeParams.setMargins(0, 0, 0, dp(20));
         splitModeContainer.setLayoutParams(modeParams);
 
         btnSplitEqual   = createModeButton("Equal",   "equal");
@@ -431,7 +453,7 @@ public class AddTripActivity extends AppCompatActivity {
         tvSplitModeHint = new TextView(this);
         tvSplitModeHint.setTextColor(0xFF7B8AA0);
         tvSplitModeHint.setTextSize(13);
-        tvSplitModeHint.setPadding(0, 0, 0, 16);
+        tvSplitModeHint.setPadding(0, 0, 0, dp(16));
         percentageContainer.addView(tvSplitModeHint);
 
         updateSplitMode("equal");
@@ -442,8 +464,8 @@ public class AddTripActivity extends AppCompatActivity {
         btn.setText(label);
         btn.setTextSize(14);
         btn.setAllCaps(false);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, 52, 1f);
-        params.setMargins(0, 0, 8, 0);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        params.setMargins(0, 0, dp(8), 0);
         btn.setLayoutParams(params);
         btn.setStateListAnimator(null);
         btn.setOnClickListener(v -> updateSplitMode(mode));
@@ -495,11 +517,11 @@ public class AddTripActivity extends AppCompatActivity {
             tv.setText(name + "  •  ₹" + String.format("%.2f", equalShare));
             tv.setTextColor(0xFFF0F0FF);
             tv.setTextSize(15);
-            tv.setPadding(16, 12, 16, 12);
+            tv.setPadding(dp(16), dp(12), dp(16), dp(12));
             tv.setBackgroundResource(R.drawable.bg_input);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            params.setMargins(0, 0, 0, 8);
+            params.setMargins(0, 0, 0, dp(8));
             tv.setLayoutParams(params);
             tv.setTag("inputRow");
             percentageContainer.addView(tv);
@@ -519,10 +541,10 @@ public class AddTripActivity extends AppCompatActivity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackgroundResource(R.drawable.bg_input);
-        row.setPadding(20, 12, 20, 12);
+        row.setPadding(dp(20), dp(12), dp(20), dp(12));
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rowParams.setMargins(0, 0, 0, 8);
+        rowParams.setMargins(0, 0, 0, dp(8));
         row.setLayoutParams(rowParams);
         row.setTag("inputRow");
 
@@ -540,10 +562,10 @@ public class AddTripActivity extends AppCompatActivity {
         et.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         et.setGravity(Gravity.CENTER);
         et.setBackgroundResource(R.drawable.bg_input);
-        et.setPadding(12, 8, 12, 8);
-        LinearLayout.LayoutParams etParams = new LinearLayout.LayoutParams(100,
+        et.setPadding(dp(12), dp(8), dp(12), dp(8));
+        LinearLayout.LayoutParams etParams = new LinearLayout.LayoutParams(dp(72),
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        etParams.setMargins(8, 0, 8, 0);
+        etParams.setMargins(dp(8), 0, dp(8), 0);
         et.setLayoutParams(etParams);
 
         TextView unitTv = new TextView(this);

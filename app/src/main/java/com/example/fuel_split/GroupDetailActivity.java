@@ -13,6 +13,10 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 
@@ -42,6 +46,7 @@ public class GroupDetailActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_group_detail);
+        applyEdgeToEdgeInsets();
 
         groupAddress     = getIntent().getStringExtra(EXTRA_GROUP_ADDRESS);
         tvGroupName      = findViewById(R.id.tvDetailGroupName);
@@ -411,6 +416,23 @@ public class GroupDetailActivity extends AppCompatActivity {
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────
+
+    /** Pad the header below the status bar and the bottom bar above the nav bar. */
+    private void applyEdgeToEdgeInsets() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        View header    = findViewById(R.id.groupDetailHeader);
+        View bottomBar = findViewById(R.id.groupDetailBottomBar);
+        final int headerTop    = header.getPaddingTop();
+        final int bottomBottom = bottomBar.getPaddingBottom();
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootGroupDetail), (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            header.setPadding(header.getPaddingLeft(), headerTop + bars.top,
+                              header.getPaddingRight(), header.getPaddingBottom());
+            bottomBar.setPadding(bottomBar.getPaddingLeft(), bottomBar.getPaddingTop(),
+                                 bottomBar.getPaddingRight(), bottomBottom + bars.bottom);
+            return insets;
+        });
+    }
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);

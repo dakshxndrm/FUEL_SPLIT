@@ -9,6 +9,7 @@
 
     <!-- Header -->
     <LinearLayout
+        android:id="@+id/addTripHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
@@ -303,6 +304,7 @@
 
     <!-- Bottom: Next / Submit -->
     <LinearLayout
+        android:id="@+id/addTripBottomBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"

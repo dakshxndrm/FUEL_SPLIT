@@ -9,6 +9,10 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.button.MaterialButton;
 
@@ -25,6 +29,17 @@ public class OnboardingActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_onboarding);
+
+        // Edge-to-edge: keep content clear of the status bar and gesture nav bar.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        View root = findViewById(R.id.rootOnboarding);
+        final int basePad = root.getPaddingLeft();
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(basePad + bars.left, basePad + bars.top,
+                         basePad + bars.right, basePad + bars.bottom);
+            return insets;
+        });
 
         etUsername    = findViewById(R.id.etUsername);
         etReferral    = findViewById(R.id.etReferral);
