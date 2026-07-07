@@ -29,11 +29,24 @@ public class FaucetClient {
             if (code != 200) {
                 InputStream err = conn.getErrorStream();
                 String msg = err != null ? readStream(err) : "HTTP " + code;
+                if (isTreasuryEmpty(msg)) {
+                    throw new Exception(
+                            "Demo faucet is temporarily out of funds. Please try again later.");
+                }
                 throw new Exception("Faucet error: " + msg);
             }
         } finally {
             conn.disconnect();
         }
+    }
+
+    /** True when the faucet's error indicates its treasury wallet has run dry. */
+    private static boolean isTreasuryEmpty(String errorBody) {
+        String s = errorBody.toLowerCase();
+        return s.contains("insufficient funds")
+                || s.contains("insufficient balance")
+                || s.contains("treasury")
+                || s.contains("out of funds");
     }
 
     private static String readStream(InputStream is) throws Exception {

@@ -6,10 +6,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import com.google.android.material.button.MaterialButton;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +28,7 @@ public class TripDetailActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_trip_detail);
-        applyEdgeToEdgeInsets();
+        EdgeToEdge.apply(this, R.id.rootTripDetail, R.id.tripDetailHeader, R.id.tripDetailBottomBar);
 
         tripIndex = getIntent().getIntExtra(EXTRA_TRIP_INDEX, -1);
         List<Trip> trips = TripStore.loadTrips(this);
@@ -184,20 +180,4 @@ public class TripDetailActivity extends AppCompatActivity {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
-    /** Pad the header below the status bar and the settle bar above the nav bar. */
-    private void applyEdgeToEdgeInsets() {
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        View header    = findViewById(R.id.tripDetailHeader);
-        View bottomBar = findViewById(R.id.tripDetailBottomBar);
-        final int headerTop    = header.getPaddingTop();
-        final int bottomBottom = bottomBar.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootTripDetail), (v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            header.setPadding(header.getPaddingLeft(), headerTop + bars.top,
-                              header.getPaddingRight(), header.getPaddingBottom());
-            bottomBar.setPadding(bottomBar.getPaddingLeft(), bottomBar.getPaddingTop(),
-                                 bottomBar.getPaddingRight(), bottomBottom + bars.bottom);
-            return insets;
-        });
-    }
 }

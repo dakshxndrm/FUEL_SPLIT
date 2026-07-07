@@ -69,13 +69,17 @@ public class OnboardingActivity extends AppCompatActivity {
                 BlockchainManager bm   = new BlockchainManager();
                 ContractManager cm     = new ContractManager(bm.getWeb3(), creds);
 
-                runOnUiThread(() -> setLoading(true, "Funding your wallet..."));
+                runOnUiThread(() -> setLoading(true, "Funding your wallet…"));
                 FaucetClient.fundWallet(creds.getAddress());
+
+                runOnUiThread(() -> setLoading(true,
+                        "Confirming on blockchain… this can take up to a minute"));
+                cm.waitForGas();
 
                 runOnUiThread(() -> setLoading(true, "Creating your profile..."));
                 String code = ProfileClient.createProfile(creds.getAddress(), username);
 
-                runOnUiThread(() -> setLoading(true, "Registering on blockchain..."));
+                runOnUiThread(() -> setLoading(true, "Registering…"));
 
                 boolean already = cm.isRegistered(creds.getAddress());
                 if (!already) {
@@ -99,6 +103,7 @@ public class OnboardingActivity extends AppCompatActivity {
                 });
 
             } catch (Exception e) {
+                android.util.Log.e("FUELSPLIT", "Register failed", e);
                 runOnUiThread(() -> {
                     setLoading(false, "Error: " + e.getMessage());
                 });

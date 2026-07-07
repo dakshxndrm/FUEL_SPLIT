@@ -7,10 +7,6 @@ import android.view.View;
 import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
@@ -57,7 +53,7 @@ public class AddTripActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_trip);
-        applyEdgeToEdgeInsets();
+        EdgeToEdge.apply(this, R.id.rootAddTrip, R.id.addTripHeader, R.id.addTripBottomBar);
 
         viewFlipper         = findViewById(R.id.viewFlipper);
         etTripName          = findViewById(R.id.etTripName);
@@ -272,23 +268,6 @@ public class AddTripActivity extends AppCompatActivity {
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
-    }
-
-    /** Pad the header below the status bar and the Next/Submit bar above the nav bar. */
-    private void applyEdgeToEdgeInsets() {
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        View header    = findViewById(R.id.addTripHeader);
-        View bottomBar = findViewById(R.id.addTripBottomBar);
-        final int headerTop    = header.getPaddingTop();
-        final int bottomBottom = bottomBar.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootAddTrip), (v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            header.setPadding(header.getPaddingLeft(), headerTop + bars.top,
-                              header.getPaddingRight(), header.getPaddingBottom());
-            bottomBar.setPadding(bottomBar.getPaddingLeft(), bottomBar.getPaddingTop(),
-                                 bottomBar.getPaddingRight(), bottomBottom + bars.bottom);
-            return insets;
-        });
     }
 
     // ── Update header ──────────────────────────────────────────────────────

@@ -274,25 +274,43 @@ public class ContractManager {
     }
 
     private String sendTx(String to, String encodedFn, long gasLimit) throws Exception {
-        BigInteger nonce    = web3.ethGetTransactionCount(
-                credentials.getAddress(), DefaultBlockParameterName.LATEST)
-                .send().getTransactionCount();
-        BigInteger gasPrice = web3.ethGasPrice().send().getGasPrice();
-        BigInteger gas      = BigInteger.valueOf(gasLimit);
-        try {
-            Transaction estimateTx = Transaction.createFunctionCallTransaction(
-                    credentials.getAddress(), nonce, gasPrice, null, to, encodedFn);
-            org.web3j.protocol.core.methods.response.EthEstimateGas est =
-                    web3.ethEstimateGas(estimateTx).send();
-            if (!est.hasError()) {
-                gas = est.getAmountUsed().multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(4));
+        Exception last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                BigInteger nonce = web3.ethGetTransactionCount(
+                        credentials.getAddress(), DefaultBlockParameterName.LATEST)
+                        .send().getTransactionCount();
+                BigInteger gasPrice = web3.ethGasPrice().send().getGasPrice();
+                BigInteger gas = BigInteger.valueOf(gasLimit);
+
+                // Try to estimate, but never let a failed estimate block the tx —
+                // fall back to the caller's fixed gas limit.
+                try {
+                    Transaction estimateTx = Transaction.createFunctionCallTransaction(
+                            credentials.getAddress(), nonce, gasPrice, null, to, encodedFn);
+                    org.web3j.protocol.core.methods.response.EthEstimateGas est =
+                            web3.ethEstimateGas(estimateTx).send();
+                    if (!est.hasError() && est.getAmountUsed() != null) {
+                        BigInteger estimated = est.getAmountUsed()
+                                .multiply(BigInteger.valueOf(5)).divide(BigInteger.valueOf(4));
+                        // use the larger of estimate and the caller's floor
+                        if (estimated.compareTo(gas) > 0) gas = estimated;
+                    }
+                } catch (Exception ignored) {}
+
+                RawTransaction raw = RawTransaction.createTransaction(nonce, gasPrice, gas, to, encodedFn);
+                byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, credentials);
+                EthSendTransaction tx = web3.ethSendRawTransaction(Numeric.toHexString(signed)).send();
+                if (tx.hasError()) throw new Exception(tx.getError().getMessage());
+                return tx.getTransactionHash();
+
+            } catch (Exception e) {
+                last = e;
+                Thread.sleep(3000); // let the node settle, then retry
             }
-        } catch (Exception ignored) {}
-        RawTransaction raw  = RawTransaction.createTransaction(nonce, gasPrice, gas, to, encodedFn);
-        byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, credentials);
-        EthSendTransaction tx = web3.ethSendRawTransaction(Numeric.toHexString(signed)).send();
-        if (tx.hasError()) throw new Exception(tx.getError().getMessage());
-        return tx.getTransactionHash();
+        }
+        throw new Exception("Transaction failed after retries: " +
+                (last != null ? last.getMessage() : "unknown"));
     }
 
     private DynamicArray<Address> toAddressArray(List<String> addresses) {
