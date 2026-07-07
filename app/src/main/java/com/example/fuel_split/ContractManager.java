@@ -118,17 +118,6 @@ public class ContractManager {
         return !result.isEmpty() && (Boolean) result.get(0).getValue();
     }
 
-    // ARCHIVED: getUsernameAddress() — superseded by ProfileClient.lookupByCode(), never called
-    // public String getUsernameAddress(String username) throws Exception {
-    //     Function fn = new Function("getAddressByUsername",
-    //             Collections.singletonList(new Utf8String(username)),
-    //             Collections.singletonList(new TypeReference<Address>() {}));
-    //     List<Type> result = ethCall(USER_REGISTRY_ADDRESS, fn);
-    //     if (result.isEmpty()) return null;
-    //     String addr = result.get(0).getValue().toString();
-    //     return addr.equals("0x0000000000000000000000000000000000000000") ? null : addr;
-    // }
-
     // ── GroupFactory reads ────────────────────────────────────────────────────
 
     public List<String> getUserGroups() throws Exception {
@@ -166,15 +155,6 @@ public class ContractManager {
                 Collections.singletonList(new TypeReference<DynamicArray<Address>>() {}));
         return decodeAddressList(ethCall(groupAddress, fn));
     }
-
-    // ARCHIVED: getOwed() — pre-getDebts() per-pair balance query, never called
-    // public long getOwed(String groupAddress, String debtor, String creditor) throws Exception {
-    //     Function fn = new Function("getOwed",
-    //             Arrays.asList(new Address(debtor), new Address(creditor)),
-    //             Collections.singletonList(new TypeReference<Uint256>() {}));
-    //     List<Type> result = ethCall(groupAddress, fn);
-    //     return result.isEmpty() ? 0L : ((BigInteger) result.get(0).getValue()).longValue();
-    // }
 
     public List<DebtRecord> getDebts(String groupAddress) throws Exception {
         Function fn = new Function("getDebts", Collections.emptyList(),
@@ -251,14 +231,6 @@ public class ContractManager {
                 Collections.emptyList());
         return sendTx(groupAddress, FunctionEncoder.encode(fn), DEFAULT_GAS_LIMIT);
     }
-
-    // ARCHIVED: renameGroup() — no rename UI exists anywhere in the app, never called
-    // public String renameGroup(String groupAddress, String newName) throws Exception {
-    //     Function fn = new Function("renameGroup",
-    //             Collections.singletonList(new Utf8String(newName)),
-    //             Collections.emptyList());
-    //     return sendTx(groupAddress, FunctionEncoder.encode(fn), DEFAULT_GAS_LIMIT);
-    // }
 
     public String addMemberToGroup(String groupAddress, String memberAddress) throws Exception {
         Function fn = new Function("addMember",

@@ -1,6 +1,5 @@
 package com.example.fuel_split;
 
-import android.widget.TextView;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class NameResolver {
@@ -19,24 +18,6 @@ public final class NameResolver {
         String cached = cache.get(address.toLowerCase());
         return cached != null ? cached : shortAddr(address);
     }
-
-    // ARCHIVED: resolveAsync() — all call sites do inline background lookups instead, never called
-    // public static void resolveAsync(String address, TextView tv) {
-    //     if (address == null || address.isEmpty()) { tv.setText("Unknown"); return; }
-    //     String key    = address.toLowerCase();
-    //     String cached = cache.get(key);
-    //     if (cached != null) { tv.setText(cached); return; }
-    //     tv.setText(shortAddr(address));
-    //     new Thread(() -> {
-    //         try {
-    //             String[] result = ProfileClient.lookupByAddress(address);
-    //             if (result != null && result.length > 1 && !result[1].isEmpty()) {
-    //                 cache.put(key, result[1]);
-    //                 tv.post(() -> tv.setText(result[1]));
-    //             }
-    //         } catch (Exception ignored) {}
-    //     }).start();
-    // }
 
     /**
      * Seed the cache with a name already known (e.g. from lookupByCode results).

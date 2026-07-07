@@ -47,8 +47,7 @@ public class TripAdapter extends RecyclerView.Adapter<TripAdapter.TripViewHolder
         boolean settled = trip.isSettled();
         holder.badge.setText(settled ? "Settled" : "Pending");
         holder.badge.setTextColor(settled ? 0xFF00C9A7 : 0xFFFFB347);
-        holder.badge.setBackgroundResource(settled
-                ? R.drawable.bg_paidby_pill : R.drawable.bg_paidby_pill);
+        holder.badge.setBackgroundResource(R.drawable.bg_paidby_pill);
 
         // Member initials
         String raw = trip.getMembers().replace("[", "").replace("]", "");

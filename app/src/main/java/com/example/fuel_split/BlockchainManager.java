@@ -2,12 +2,10 @@ package com.example.fuel_split;
 
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.http.HttpService;
-import org.web3j.protocol.core.methods.response.Web3ClientVersion;
 
 import okhttp3.OkHttpClient;
 import okhttp3.ConnectionSpec;
 
-import java.util.Collections;
 import java.util.Arrays;
 
 
@@ -29,10 +27,4 @@ public class BlockchainManager {
     public Web3j getWeb3() {
         return web3;
     }
-
-    // ARCHIVED: testConnection() — dev-only RPC ping, never called in production code
-    // public String testConnection() throws Exception {
-    //     Web3ClientVersion version = web3.web3ClientVersion().send();
-    //     return version.getWeb3ClientVersion();
-    // }
 }

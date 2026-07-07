@@ -9,7 +9,6 @@ public class Trip implements Serializable {
 
     // On-chain / store fields (nullable/default when loaded from old data)
     private String groupAddress;
-    private long   expenseId      = -1;
     private boolean settled       = false;
     private long   timestampMillis;
 
@@ -33,14 +32,10 @@ public class Trip implements Serializable {
     public Map<String, Double> getAllShares() { return allShares; }
     public String getPaidBy()                { return paidBy; }
     public String getGroupAddress()          { return groupAddress; }
-    // ARCHIVED: getExpenseId() — expenseId field never written after construction, never read
-    // public long getExpenseId() { return expenseId; }
     public boolean isSettled()               { return settled; }
     public long   getTimestampMillis()       { return timestampMillis; }
 
     public void setGroupAddress(String groupAddress) { this.groupAddress = groupAddress; }
-    // ARCHIVED: setExpenseId() — AddTripActivity never calls this after saving on-chain, never called
-    // public void setExpenseId(long expenseId) { this.expenseId = expenseId; }
     public void setSettled(boolean settled)          { this.settled = settled; }
     public void setTimestampMillis(long ms)          { this.timestampMillis = ms; }
 }
