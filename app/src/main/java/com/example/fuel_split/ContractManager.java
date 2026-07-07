@@ -99,11 +99,27 @@ public class ContractManager {
         return balance.compareTo(BigInteger.ZERO) > 0;
     }
 
+    /**
+     * Waits for the wallet's funding to become visible on-chain.
+     * Public RPC nodes can lag behind the node the faucet used, so a
+     * fresh wallet may briefly show a zero balance right after funding.
+     * Polls up to ~30 seconds before giving up.
+     */
+    public void waitForGas() throws Exception {
+        int attempts = 15;
+        for (int i = 0; i < attempts; i++) {
+            if (hasGas()) return;
+            Thread.sleep(2000); // 2s between checks → ~30s total
+        }
+        throw new Exception(
+                "Funding is taking longer than expected to confirm. " +
+                "Please try again in a moment. Address: " + credentials.getAddress());
+    }
+
     private void requireGas() throws Exception {
         if (!hasGas()) {
             throw new Exception(
-                    "This wallet has no test POL for gas. " +
-                    "Fund it from the Polygon Amoy faucet first. " +
+                    "This wallet has no Sepolia ETH for gas yet. " +
                     "Address: " + credentials.getAddress());
         }
     }
