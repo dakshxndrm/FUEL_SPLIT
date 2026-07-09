@@ -6,9 +6,12 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -96,11 +99,36 @@ public class MainActivity extends AppCompatActivity {
 
         // Identity row
         LinearLayout header = findViewById(R.id.appHeader);
+        LinearLayout identityRow = new LinearLayout(this);
+        identityRow.setOrientation(LinearLayout.HORIZONTAL);
+        identityRow.setGravity(Gravity.CENTER_VERTICAL);
+        identityRow.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        header.addView(identityRow, 1);
+
         tvIdentity = new TextView(this);
         tvIdentity.setTextColor(0xFFFFFFFF);
         tvIdentity.setTextSize(15);
         tvIdentity.setPadding(0, dp(6), 0, dp(2));
-        header.addView(tvIdentity, 1);
+        identityRow.addView(tvIdentity, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+
+        ImageButton btnCopyFriendCode = new ImageButton(this);
+        btnCopyFriendCode.setImageResource(android.R.drawable.ic_menu_copy);
+        btnCopyFriendCode.setBackground(null);
+        btnCopyFriendCode.setColorFilter(0xFFFFFFFF);
+        btnCopyFriendCode.setPadding(dp(8), dp(8), dp(8), dp(8));
+        btnCopyFriendCode.setContentDescription("Copy friend code");
+        btnCopyFriendCode.setVisibility(View.GONE);
+        identityRow.addView(btnCopyFriendCode, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
 
         tvWalletAddress = new TextView(this);
         tvWalletAddress.setTextColor(0xFF7B8AA0);
@@ -110,14 +138,11 @@ public class MainActivity extends AppCompatActivity {
 
         SharedPreferences profilePrefs = getSharedPreferences("FuelSplitProfile", MODE_PRIVATE);
         String displayName = profilePrefs.getString("displayName", "");
-        String friendCode  = profilePrefs.getString("code", "");
+        String friendCode  = normalizeFriendCode(profilePrefs.getString("code", ""));
         if (!displayName.isEmpty()) {
             tvIdentity.setText(displayName + "  —  Code: " + friendCode);
-            tvIdentity.setOnClickListener(v -> {
-                ClipboardManager cm2 = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                cm2.setPrimaryClip(ClipData.newPlainText("Friend code", friendCode));
-                Toast.makeText(this, "Code copied!", Toast.LENGTH_SHORT).show();
-            });
+            btnCopyFriendCode.setVisibility(View.VISIBLE);
+            btnCopyFriendCode.setOnClickListener(v -> copyFriendCode(friendCode));
         }
 
         // Pre-warm NameResolver from saved contacts (no network needed)
@@ -614,6 +639,23 @@ public class MainActivity extends AppCompatActivity {
             return semi > 5 ? desc.substring(5, semi) : desc.substring(5);
         }
         return desc;
+    }
+
+    static String normalizeFriendCode(@Nullable String code) {
+        return code == null ? "" : code.replaceAll("\\s+", "");
+    }
+
+    static boolean shouldShowCopyToast(int sdkInt) {
+        return sdkInt < Build.VERSION_CODES.TIRAMISU;
+    }
+
+    private void copyFriendCode(String friendCode) {
+        ClipboardManager clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboardManager == null) return;
+        clipboardManager.setPrimaryClip(ClipData.newPlainText("Friend code", friendCode));
+        if (shouldShowCopyToast(Build.VERSION.SDK_INT)) {
+            Toast.makeText(this, "Code copied", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private int dp(int v) {
