@@ -7,7 +7,9 @@ FuelSplit is a native Android expense-splitting app (think Splitwise) where ever
 > Related repositories:
 > - [`FuelSplitContracts`](https://github.com/dakshxndrm/fuelsplit_contracts) — Solidity smart contracts + Hardhat deployment
 > - [`fuelsplit-faucet`](https://github.com/dakshxndrm/fuelsplit-faucet) — Serverless gas faucet & identity backend
+> - [`fuelsplit_site`](https://github.com/dakshxndrm/fuelsplit_site)
 
+> Apk Link - [`FuelSplit Apk`](https://fuelsplit-site.vercel.app/) — Flask website for downloading the apk of this app.
 ---
 
 ## Table of Contents
