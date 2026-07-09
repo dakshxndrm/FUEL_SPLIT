@@ -172,6 +172,54 @@ public class ContractManager {
         return decodeAddressList(ethCall(groupAddress, fn));
     }
 
+    // ── Expense reads (for reconstructing the Trips list from chain) ──────────
+    //
+    // NOTE: ExpenseLedger.getExpenses() returns an Expense[] struct array whose
+    // struct contains two nested dynamic arrays (members[], shares[]). web3j
+    // decodes nested-dynamic-array structs unreliably, so instead we use the
+    // Solidity auto-generated public getter `expenses(uint256)`. Solidity omits
+    // dynamic-array struct members from auto getters, so it returns exactly the
+    // five scalar fields we need: (id, description, amountPaise, paidBy, timestamp).
+
+    public static class ExpenseInfo {
+        public String     payer;
+        public BigInteger amount;      // amountPaise
+        public String     description;
+        public BigInteger timestamp;   // unix seconds
+        public String     groupAddress;
+    }
+
+    public List<ExpenseInfo> getExpenses(String groupAddress) throws Exception {
+        Function countFn = new Function("getExpenseCount", Collections.emptyList(),
+                Collections.singletonList(new TypeReference<Uint256>() {}));
+        List<Type> countRes = ethCall(groupAddress, countFn);
+        List<ExpenseInfo> out = new ArrayList<>();
+        if (countRes.isEmpty()) return out;
+        int count = ((BigInteger) countRes.get(0).getValue()).intValue();
+
+        for (int i = 0; i < count; i++) {
+            Function fn = new Function("expenses",
+                    Collections.singletonList(new Uint256(BigInteger.valueOf(i))),
+                    Arrays.asList(
+                            new TypeReference<Uint256>()    {}, // id
+                            new TypeReference<Utf8String>() {}, // description
+                            new TypeReference<Uint256>()    {}, // amountPaise
+                            new TypeReference<Address>()    {}, // paidBy
+                            new TypeReference<Uint256>()    {}  // timestamp
+                    ));
+            List<Type> r = ethCall(groupAddress, fn);
+            if (r.size() < 5) continue;
+            ExpenseInfo e   = new ExpenseInfo();
+            e.description    = r.get(1).getValue().toString();
+            e.amount         = (BigInteger) r.get(2).getValue();
+            e.payer          = r.get(3).getValue().toString();
+            e.timestamp      = (BigInteger) r.get(4).getValue();
+            e.groupAddress   = groupAddress;
+            out.add(e);
+        }
+        return out;
+    }
+
     public List<DebtRecord> getDebts(String groupAddress) throws Exception {
         Function fn = new Function("getDebts", Collections.emptyList(),
                 Collections.singletonList(new TypeReference<DynamicArray<DebtStruct>>() {}));

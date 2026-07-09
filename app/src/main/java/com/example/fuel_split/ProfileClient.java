@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 
 public class ProfileClient {
 
-    private static final String BASE = "https://fuelsplit-faucet.vercel.app";
+    private static final String BASE = Config.PROFILE_BASE;
 
     public static String createProfile(String address, String displayName) throws Exception {
         URL url = new URL(BASE + "/api/profile");

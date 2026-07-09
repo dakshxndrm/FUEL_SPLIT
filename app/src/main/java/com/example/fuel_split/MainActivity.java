@@ -209,12 +209,18 @@ public class MainActivity extends AppCompatActivity {
 
                 boolean already = cm.isRegistered(myAddress);
                 if (!already) {
-                    String savedCode = getSharedPreferences("FuelSplitProfile", MODE_PRIVATE)
-                            .getString("code", "");
-                    if (!savedCode.isEmpty()) cm.register(savedCode, "");
+                    // username is captured at onboarding and stored in "fuelsplit" prefs
+                    String savedUsername = getSharedPreferences("fuelsplit", MODE_PRIVATE)
+                            .getString("username", "");
+                    // register(username, referralCode) — username first. We don't track a
+                    // referrer, so referral is left empty (our own code isn't a referrer).
+                    if (!savedUsername.isEmpty()) cm.register(savedUsername, "");
                 }
-                // Load groups in background once cm is ready
-                runOnUiThread(() -> { if (currentTab == R.id.nav_groups) loadGroups(); });
+                // Once cm is ready, refresh trips (from chain) and groups if visible
+                runOnUiThread(() -> {
+                    loadTripsFromChain();
+                    if (currentTab == R.id.nav_groups) loadGroups();
+                });
             } catch (Exception e) {
                 android.util.Log.e("FUELSPLIT", "Init error", e);
             }
@@ -224,15 +230,98 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Reload trips whenever we return from AddTripActivity or TripDetailActivity
+        // Show cached trips instantly, then refresh from chain once cm is ready
         tripList.clear();
         tripList.addAll(TripStore.loadTrips(this));
         tripAdapter.notifyDataSetChanged();
         updateEmptyState();
         updateSubtitle();
+        if (cm != null) loadTripsFromChain();
         // Refresh the active tab
         if (currentTab == R.id.nav_groups && cm != null) loadGroups();
         if (currentTab == R.id.nav_balances) showSettlements();
+    }
+
+    // ── Trips loading (from chain) ───────────────────────────────────────────
+    //
+    // Trip cards are reconstructed from on-chain expenses whose description was
+    // encoded as "name=…;km=…;mileage=…;fuel=…" by AddTripActivity. Every member
+    // scans their own getUserGroups() → getExpenses(), so A/B/C/D all see the same
+    // trips. Purely-local (offline, never-on-chain) trips are merged back in.
+    private void loadTripsFromChain() {
+        if (cm == null) return;
+        new Thread(() -> {
+            List<Trip> chainTrips = new ArrayList<>();
+            try {
+                List<String> groups = cm.getUserGroups();
+                for (String groupAddr : groups) {
+                    try {
+                        if (cm.isGroupDeleted(groupAddr)) continue;
+                        List<String> groupMembers = cm.getGroupMembers(groupAddr);
+                        for (ContractManager.ExpenseInfo e : cm.getExpenses(groupAddr)) {
+                            if (e.description == null || !e.description.startsWith("name=")) continue;
+                            chainTrips.add(tripFromExpense(e, groupMembers));
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ex) {
+                android.util.Log.e("FUELSPLIT", "loadTripsFromChain failed", ex);
+            }
+
+            // Merge in offline-only trips (created without an on-chain group)
+            List<Trip> merged = new ArrayList<>(chainTrips);
+            for (Trip lt : TripStore.loadTrips(this)) {
+                if (lt.getGroupAddress() == null || lt.getGroupAddress().isEmpty()) merged.add(lt);
+            }
+            Collections.sort(merged, (a, b) ->
+                    Long.compare(b.getTimestampMillis(), a.getTimestampMillis()));
+            TripStore.saveTrips(this, merged); // keep a fresh offline cache
+
+            runOnUiThread(() -> {
+                tripList.clear();
+                tripList.addAll(merged);
+                tripAdapter.notifyDataSetChanged();
+                updateEmptyState();
+                updateSubtitle();
+            });
+        }).start();
+    }
+
+    // Rebuild a Trip from an on-chain expense description.
+    private Trip tripFromExpense(ContractManager.ExpenseInfo e, List<String> groupMembers) {
+        String name = "", km = "", mileage = "";
+        for (String part : e.description.split(";")) {
+            int eq = part.indexOf('=');
+            if (eq < 0) continue;
+            String k = part.substring(0, eq);
+            String v = part.substring(eq + 1);
+            if (k.equals("name"))         name    = v;
+            else if (k.equals("km"))      km      = v;
+            else if (k.equals("mileage")) mileage = v;
+        }
+
+        String distanceLabel = km.isEmpty() ? "" : km + " km";
+        String fuelLabel = "";
+        try {
+            double d = Double.parseDouble(km);
+            double m = Double.parseDouble(mileage);
+            if (m > 0) fuelLabel = String.format("%.2f L", d / m);
+        } catch (Exception ignored) {}
+
+        String totalLabel = String.format("%.2f", e.amount.doubleValue() / 100.0);
+
+        StringBuilder mem = new StringBuilder("[");
+        for (int i = 0; i < groupMembers.size(); i++) {
+            if (i > 0) mem.append(", ");
+            mem.append(NameResolver.nameFor(groupMembers.get(i)));
+        }
+        mem.append("]");
+
+        Trip t = new Trip(name, distanceLabel, fuelLabel, totalLabel,
+                mem.toString(), new HashMap<>(), NameResolver.nameFor(e.payer));
+        t.setGroupAddress(e.groupAddress);
+        t.setTimestampMillis(e.timestamp.longValue() * 1000L);
+        return t;
     }
 
     // ── Groups loading ─────────────────────────────────────────────────────
