@@ -653,7 +653,7 @@ public class AddTripActivity extends AppCompatActivity {
         HashMap<String, Double> finalShares = shares;
 
         new Thread(() -> {
-            // If launched from a group, use that address; otherwise create a new one
+            // If launched from a group, use that address; New Trip stays trip-only (no group creation)
             String groupAddress = preloadGroupAddress;
 
             try {
@@ -661,21 +661,6 @@ public class AddTripActivity extends AppCompatActivity {
                 org.web3j.crypto.Credentials creds = wm.getOrCreateWallet();
                 BlockchainManager bm  = new BlockchainManager();
                 ContractManager   cm  = new ContractManager(bm.getWeb3(), creds);
-
-                if (preloadGroupAddress == null) {
-                    // Normal flow: collect resolved members and create group
-                    List<String> resolvedAddrs = new ArrayList<>();
-                    for (String name : members) {
-                        String addr = memberToAddress.get(name);
-                        if (addr != null) resolvedAddrs.add(addr);
-                    }
-                    if (resolvedAddrs.size() >= 2) {
-                        String createHash = cm.createGroup(tripName, resolvedAddrs);
-                        cm.waitForReceipt(createHash);
-                        List<String> groups = cm.getUserGroups();
-                        if (!groups.isEmpty()) groupAddress = groups.get(groups.size() - 1);
-                    }
-                }
 
                 if (groupAddress != null) {
                     String desc = "name=" + tripName
