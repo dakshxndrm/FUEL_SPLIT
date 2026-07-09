@@ -3,11 +3,6 @@ package com.example.fuel_split;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.http.HttpService;
 
-import okhttp3.OkHttpClient;
-import okhttp3.ConnectionSpec;
-
-import java.util.Arrays;
-
 
 public class BlockchainManager {
 
@@ -16,12 +11,9 @@ public class BlockchainManager {
     private final Web3j web3;
 
     public BlockchainManager() {
-        OkHttpClient okHttpClient = new OkHttpClient.Builder()
-                .connectionSpecs(Arrays.asList(
-                        ConnectionSpec.MODERN_TLS,
-                        ConnectionSpec.CLEARTEXT))
-                .build();
-        this.web3 = Web3j.build(new HttpService(RPC_URL, okHttpClient));
+        // HttpService's default OkHttpClient already allows both TLS and
+        // cleartext, so no custom ConnectionSpec is needed for the local node.
+        this.web3 = Web3j.build(new HttpService(RPC_URL));
     }
 
     public Web3j getWeb3() {
