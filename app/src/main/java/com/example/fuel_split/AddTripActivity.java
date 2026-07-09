@@ -653,16 +653,16 @@ public class AddTripActivity extends AppCompatActivity {
         HashMap<String, Double> finalShares = shares;
 
         new Thread(() -> {
-            // If launched from a group, use that address; New Trip stays trip-only (no group creation)
+            // If launched from a group, write expense on that group; otherwise keep trip local-only
             String groupAddress = preloadGroupAddress;
 
-            try {
-                WalletManager   wm    = new WalletManager(this);
-                org.web3j.crypto.Credentials creds = wm.getOrCreateWallet();
-                BlockchainManager bm  = new BlockchainManager();
-                ContractManager   cm  = new ContractManager(bm.getWeb3(), creds);
+            if (groupAddress != null) {
+                try {
+                    WalletManager   wm    = new WalletManager(this);
+                    org.web3j.crypto.Credentials creds = wm.getOrCreateWallet();
+                    BlockchainManager bm  = new BlockchainManager();
+                    ContractManager   cm  = new ContractManager(bm.getWeb3(), creds);
 
-                if (groupAddress != null) {
                     String desc = "name=" + tripName
                             + ";km=" + distStr
                             + ";mileage=" + String.format("%.1f", mileage)
@@ -675,10 +675,10 @@ public class AddTripActivity extends AppCompatActivity {
                     List<BigInteger> equalPctShares = equalShares(groupMembers.size());
                     cm.waitForReceipt(cm.addExpense(groupAddress, desc,
                             BigInteger.valueOf(amtPaise), groupMembers, equalPctShares));
+                } catch (Exception e) {
+                    android.util.Log.e("FUELSPLIT", "Chain error during trip submit", e);
+                    // non-fatal: still save locally
                 }
-            } catch (Exception e) {
-                android.util.Log.e("FUELSPLIT", "Chain error during trip submit", e);
-                // non-fatal: still save locally
             }
 
             // Build and persist the trip locally
