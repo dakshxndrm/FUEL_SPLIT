@@ -5,7 +5,7 @@
 FuelSplit is a native Android expense-splitting app (think Splitwise) where every expense and settlement is recorded on an immutable on-chain ledger. The twist: **users never see the blockchain.** No wallet setup, no seed phrases, no gas fees, no crypto payments. The chain acts as a tamper-proof referee, not a bank.
 
 > Related repositories:
-> - [`FuelSplitContracts`](../FuelSplitContracts) — Solidity smart contracts + Hardhat deployment
+> - [`FuelSplitContracts`](../fuelsplit_contracts) — Solidity smart contracts + Hardhat deployment
 > - [`fuelsplit-faucet`](../fuelsplit-faucet) — Serverless gas faucet & identity backend
 
 ---
